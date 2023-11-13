@@ -1,7 +1,8 @@
 let audioFile;
 let meydaAnalyzer;
 
-let rectangles = [];
+let rectangles = [],
+  circles = [];
 let maxRectangles = 8;
 let backgroundCol;
 
@@ -9,18 +10,27 @@ let backgroundCol;
 let playButton, stopButton;
 let volumeSlider;
 
+let fft;
+let fftGradientA, fftGradientB;
+
 function preload() {
   soundFormats('mp3', 'wav');
   audioFile = loadSound('sounds/Kalte_Ohren_(_Remix_).mp3');
 }
 
 function setup() {
-  createCanvas(900, 700);
-  colorMode(HSB, 360, 100, 100);
-  backgroundCol = color(255);
+  createCanvas(1000, 750);
+  colorMode(HSB);
+  fftGradientA = color(0);
+  fftGradientB = color(0);
 
+  // setup playback controls
   setupButtons();
 
+  // setup spectrum analyzer
+  fft = new p5.FFT();
+
+  // setup meyda analyzer
   if (typeof Meyda === 'undefined') {
     console.log('Meyda not found');
   } else {
@@ -31,12 +41,11 @@ function setup() {
       featureExtractors: [
         'loudness',
         'rms',
+        'energy',
         'chroma',
         'spectralCentroid',
         'spectralRolloff',
-        'energy',
         'perceptualSharpness',
-        'mfcc',
       ],
       callback: (features) => updateVisuals(features),
     });
@@ -50,8 +59,25 @@ function draw() {
     meydaAnalyzer.stop();
   }
 
-  // background(backgroundCol);
   background(0);
+  audioFile.setVolume(volumeSlider.value());
+  fill(255);
+  textSize(18);
+  text('🔊 ' + Math.round(volumeSlider.value() * 100), 470, 35);
+
+  let spectrum = fft.analyze();
+  push();
+  noStroke();
+  rectMode(CORNER);
+  for (let i = 1; i < spectrum.length; i++) {
+    let amplitude = spectrum[i];
+    let x = map(i, 0, spectrum.length, 0, width);
+    let h = map(amplitude, 0, 255, 0, height);
+    let c = lerpColor(fftGradientA, fftGradientB, i / spectrum.length);
+    fill(c);
+    rect(x, height - h, width / spectrum.length, h);
+  }
+  pop();
 
   rectangles.forEach((myrect) => {
     push();
@@ -62,6 +88,14 @@ function draw() {
     strokeWeight(myrect.borderSize);
     rectMode(CENTER);
     rect(0, 0, myrect.size, myrect.size);
+    pop();
+  });
+
+  circles.forEach((mycircle) => {
+    push();
+    fill(mycircle.color);
+    noStroke();
+    ellipse(mycircle.x, mycircle.y, mycircle.diameter, mycircle.diameter);
     pop();
   });
 }
@@ -75,33 +109,26 @@ function updateVisuals(features) {
   let energy = features.energy;
   let sharpness = features.perceptualSharpness;
 
-  // Map loudness to the number of rectangles
+  // map audio features to visual parameters
   let rectCount = map(loudness, 0, 100, 0, maxRectangles);
-
-  // Adjust rectangles array based on loudness
-  rectangles = rectangles.slice(0, rectCount);
-
-  // Map rms to rectangle size
   let rectSize = map(rms, 0, 1, 50, 250);
-
-  // Map chroma to rectangle fill color hue
   let fillColor = color(map(chromaIndex, 0, 11, 0, 360), 100, 100);
-
-  // Map energy to rectangle fill color opacity
-  fillColor.setAlpha(map(energy, 0, 1, 80, 255));
-
-  // Map spectralCentroid to rectangle border size
   let borderSize = map(spectralCentroid, 2000, 5000, 2, 10);
-
-  // Map spectralRolloff to rectangle border color
   let borderColorValue = map(spectralRolloff, 0, 22050, 0, 255);
   let borderColor = color(borderColorValue, 100, 255 - borderColorValue);
+  let rotation = map(rms, 0, 1, 0, PI / 4);
 
-  // Map perceptualSharpness to rectangle border opacity
+  rectangles = rectangles.slice(0, rectCount);
+  fillColor.setAlpha(map(energy, 0, 1, 80, 255));
   borderColor.setAlpha(map(sharpness, 0, 1, 100, 255));
 
-  // Map rms to rectangle rotation
-  let rotation = map(rms, 0, 1, 0, PI / 4);
+  // map audio features to fft gradient
+  let hue = map(spectralCentroid, 2000, 5000, 240, 290);
+  let hueB = map(spectralCentroid, 2000, 5000, 0, 30);
+  let saturation = map(spectralRolloff, 0, 22050, 60, 100);
+
+  fftGradientA = color(hue, saturation, 80);
+  fftGradientB = color(hueB, saturation, 80);
 
   // set params for each rectangle
   for (let i = 0; i < rectCount; i++) {
@@ -124,31 +151,46 @@ function updateVisuals(features) {
     }
   }
 
-  // Map MFCCs to background color
-  let mfcc = features.mfcc;
-  let mfccAvg = mfcc.reduce((a, b) => a + b) / mfcc.length;
-  backgroundCol = color(mfccAvg * 255);
+  // set params for each circle
+  for (let i = 0; i < maxRectangles - rectCount + 1; i++) {
+    if (!circles[i]) {
+      circles[i] = {
+        x: random(50, width - 40),
+        y: random(50, height - 40),
+        diameter: map(rms, 0, 1, 20, 60),
+        color: color(map(chromaIndex, 0, 11, 0, 360), 100, 100),
+      };
+    } else {
+      circles[i].diameter = map(rms, 0, 1, 10, 160);
+      circles[i].color = color(map(chromaIndex, 0, 11, 0, 360), 100, 100);
+    }
+  }
+
+  // remove circles that are out of range
+  if (circles.length > maxRectangles - rectCount + 1) {
+    circles = circles.slice(0, maxRectangles - rectCount + 1);
+  }
 }
 
 function setupButtons() {
-  playButton = createButton('play');
+  playButton = createButton('PLAY');
   playButton.position(20, 20);
-  playButton.size(80, 30);
+  playButton.size(100, 30);
   playButton.addClass('button');
-  playButton.style('background-color', '#409b55');
+  playButton.style('background-color', '#17ad1c');
   playButton.mousePressed(playAudio);
 
-  stopButton = createButton('stop');
-  stopButton.position(110, 20);
-  stopButton.size(80, 30);
+  stopButton = createButton('STOP');
+  stopButton.position(130, 20);
+  stopButton.size(100, 30);
   stopButton.addClass('button');
-  stopButton.style('background-color', '#c25d5d');
+  stopButton.style('background-color', '#a31515');
   stopButton.mousePressed(stopAudio);
 
   // TODO adjust volume with slider
-  volumeSlider = createSlider(0, 1, 0.5, 0.01);
-  volumeSlider.position(200, 20);
-  volumeSlider.size(200, 30);
+  volumeSlider = createSlider(0, 1, 1, 0.01);
+  volumeSlider.position(260, 20);
+  volumeSlider.size(200, 25);
   volumeSlider.addClass('slider');
 }
 
@@ -156,18 +198,20 @@ function playAudio() {
   if (!audioFile.isPlaying()) {
     // play audio
     audioFile.play();
-    playButton.style('background-color', 'orange');
-    playButton.html('pause');
+    playButton.style('background-color', '#d96e04');
+    playButton.html('PAUSE');
   } else if (audioFile.isPlaying()) {
     // pause audio
     audioFile.pause();
-    playButton.style('background-color', '#409b55');
-    playButton.html('play');
+    playButton.style('background-color', '#6db322');
+    playButton.html('RESUME');
   }
 }
 
 function stopAudio() {
   if (audioFile.isPlaying()) {
     audioFile.stop();
+    playButton.style('background-color', '#17ad1c');
+    playButton.html('PLAY');
   }
 }
