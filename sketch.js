@@ -83,7 +83,7 @@ function draw() {
     for (let i = 1; i < spectrum.length; i++) {
         let amplitude = spectrum[i];
         let x = map(i, 0, spectrum.length, 0, width);
-        let h = map(amplitude, 0, 255, 0, height);
+        let h = map(amplitude, 0, 255, 0, height / 2);
         let c = lerpColor(fftGradientA, fftGradientB, i / spectrum.length);
         fill(c);
         rect(x, height - h, width / spectrum.length, h);
@@ -102,14 +102,16 @@ function draw() {
         // draw mix of shapes if shapeType is "mix"
         if (shapeType === "mix") {
             // map position to random number between 0 and 1
-            let mixRand = map(param.x + param.y, 0, width + height, 0, 1, true);
+            let mixRand = map(param.x, 0, width, 0, 1);
 
             // draw random shape based on mapped value
-            if (mixRand < 0.25) {
+            if (mixRand < 0.2) {
                 drawShape("rectangle", param);
-            } else if (mixRand < 0.5) {
+            } else if (mixRand < 0.4) {
+                drawShape("square", param);
+            } else if (mixRand < 0.6) {
                 drawShape("circle", param);
-            } else if (mixRand < 0.75) {
+            } else if (mixRand < 0.8) {
                 drawShape("triangle", param);
             } else {
                 drawShape("pentagon", param);
@@ -129,7 +131,11 @@ function drawShape(type, param) {
     switch (type) {
         case "rectangle":
             rectMode(CENTER);
-            rect(0, 0, param.size, param.size);
+            rect(0, 0, param.size * 1.7, param.size);
+            break;
+        case "square":
+            rectMode(CENTER);
+            rect(0, 0, param.size);
             break;
         case "circle":
             ellipse(0, 0, param.size, param.size);
@@ -169,54 +175,72 @@ function updateVisuals(features) {
     let spectralCentroid = features.spectralCentroid;
     let spectralRolloff = features.spectralRolloff;
     let energy = features.energy;
-    let sharpness = features.perceptualSharpness;
 
-    // map audio features to different parameters //
+    // map loudness to number of shapes
+    let shapeCount = map(loudness, 0, 100, 3, 15);
+    shapes = shapes.slice(0, Math.round(shapeCount));
 
-    // number of shapes
-    let shapeCount = map(loudness, 0, 100, 0, 10);
-    shapes = shapes.slice(0, shapeCount);
-
-    // size of shape
-    let shapeSize = map(rms, 0, 1, 50, 250);
-
-    // color of shape
-    let fillColor = color(map(chromaIndex, 0, 11, 0, 360), 100, 100);
-    fillColor.setAlpha(map(energy, 0, 1, 80, 255));
-
-    // border of shape
-    let borderSize = map(spectralCentroid, 2000, 5000, 2, 10);
-    let borderColorValue = map(spectralRolloff, 0, 22050, 0, 255);
-    let borderColor = color(borderColorValue, 100, 255 - borderColorValue);
-    borderColor.setAlpha(map(sharpness, 0, 1, 100, 255));
-
-    // rotation of shape
-    let rotation = map(rms, 0, 1, 0, PI / 4);
+    // map rms to rotation
+    let rotation = map(rms, 0, 1, 0, PI / 8);
 
     // map audio features to fft gradient colors
     let saturation = map(spectralRolloff, 0, 22050, 60, 100);
-    fftGradientA = color(
-        map(spectralCentroid, 2000, 5000, 240, 290),
-        saturation,
-        80
-    );
+    fftGradientA = color(map(spectralCentroid, 0, 100, 0, 30), saturation, 80);
     fftGradientB = color(
-        map(spectralCentroid, 2000, 5000, 0, 30),
+        map(spectralCentroid, 0, 100, 240, 290),
         saturation,
         80
     );
 
+    // base and increment of hue so that each shape has different hue
+    let hueIncrement = shapeCount > 1 ? 360 / shapeCount : 0;
+    let baseHue = chromaIndex * 30;
+
     // store params based on the mapped values
     for (let i = 0; i < shapeCount; i++) {
+        let shapeSize;
+
+        // set shape color
+        let hueVal = (baseHue + i * hueIncrement) % 360;
+        let saturationVal = map(spectralCentroid, 0, 100, 50, 100);
+        let brightnessVal = map(loudness, 0, 100, 60, 100);
+        let alphaVal = map(energy, 0, 1, 100, 255);
+        let fillColor = color(hueVal, saturationVal, brightnessVal, alphaVal);
+
+        // set border size and color
+        let borderSize = map(spectralCentroid, 0, 100, 2, 5);
+        let borderHue = map(spectralRolloff, 0, 22050, 0, random(360));
+        let borderColor = color(borderHue, 100, brightnessVal, alphaVal);
+
+        let x, y;
+        if (i < 4) {
+            // map to different max sizes for variation in size
+            let maxSizes = [200, 80, 150, 210];
+            shapeSize = map(spectralCentroid, 0, 100, 120, maxSizes[i]);
+
+            // position first 4 shapes in middle of canvas
+            x = width / 4 + i * (shapeSize + 70);
+            y = height / 2 - shapeSize / 2;
+        } else {
+            // set smaller shape sizes
+            shapeSize = map(spectralCentroid, 0, 100, 5, 25);
+
+            // position remaining shapes randomly above and below the middle
+            x = random(width);
+            y = random(20, 150);
+
+            // use grey colors for fill and border color
+            brightnessVal = map(spectralCentroid, 0, 100, 50, 100);
+            saturationVal = map(spectralCentroid, 0, 100, 0, 20);
+            fillColor = color(0, saturationVal, brightnessVal);
+            borderColor = fillColor;
+        }
+
         // add new shape's params
         if (!shapes[i]) {
-            let maxX = width - 50;
-            let maxY = height - 50;
             shapes[i] = {
-                // x: map(spectralCentroid, 0, 2000, 50, maxX),
-                // y: map(energy, 0, 1, 50, maxY),
-                x: random(50, width - 40),
-                y: random(50, height - 40),
+                x: x,
+                y: y,
                 size: shapeSize,
                 fillColor: fillColor,
                 borderColor: borderColor,
@@ -226,8 +250,11 @@ function updateVisuals(features) {
         }
         // update existing params
         else {
-            shapes[i].size = shapeSize;
+            // only update alpha value of fill color
+            shapes[i].x = x;
+            shapes[i].y = y;
             shapes[i].fillColor = fillColor;
+            shapes[i].size = shapeSize;
             shapes[i].borderColor = borderColor;
             shapes[i].borderSize = borderSize;
             shapes[i].rotation += rotation;
@@ -282,47 +309,52 @@ function stopAudio() {
     }
 }
 
-/** update relevant params based on speech command given */
+/** update relevant params based on speech command */
 function handleSpeech() {
     if (voiceInput.resultValue) {
-        // get speech input
+        // map shape to command
+        const shapeMap = {
+            rectangle: "rectangle",
+            square: "square",
+            circle: "circle",
+            triangle: "triangle",
+            pentagon: "pentagon",
+            mix: "mix",
+        };
+
+        // map color to command
+        const colorMap = {
+            red: color(0, 100, 100),
+            green: color(120, 100, 100),
+            blue: color(240, 100, 100),
+            yellow: color(60, 100, 100),
+            white: color(0, 0, 100),
+            black: color(0, 0, 0),
+        };
+
+        // get input from speech
         let speech = voiceInput.resultString;
         speech = speech.toLowerCase();
-        console.log(speech);
 
-        // set audio status based on speech input
+        // update shape type if command matches
+        for (let shape in shapeMap) {
+            if (speech.includes(shape)) {
+                shapeType = shapeMap[shape];
+            }
+        }
+
+        // update background color if command matches
+        for (let color in colorMap) {
+            if (speech.includes(color)) {
+                backgroundCol = colorMap[color];
+            }
+        }
+
+        // update audio status if command matches
         if (speech.includes("pause") || speech.includes("resume")) {
             playAudio();
         } else if (speech.includes("stop")) {
             stopAudio();
-        }
-
-        // set shape type based on speech input
-        else if (speech.includes("rectangle") || speech.includes("square")) {
-            shapeType = "rectangle";
-        } else if (speech.includes("circle")) {
-            shapeType = "circle";
-        } else if (speech.includes("triangle")) {
-            shapeType = "triangle";
-        } else if (speech.includes("pentagon")) {
-            shapeType = "pentagon";
-        } else if (speech.includes("mix")) {
-            shapeType = "mix";
-        }
-
-        // set background color based on speech input
-        else if (speech.includes("red")) {
-            backgroundCol = color(0, 100, 100);
-        } else if (speech.includes("green")) {
-            backgroundCol = color(120, 100, 100);
-        } else if (speech.includes("blue")) {
-            backgroundCol = color(240, 100, 100);
-        } else if (speech.includes("yellow")) {
-            backgroundCol = color(60, 100, 100);
-        } else if (speech.includes("white")) {
-            backgroundCol = color(0, 0, 100);
-        } else if (speech.includes("black")) {
-            backgroundCol = color(0, 0, 0);
         }
     }
 }
