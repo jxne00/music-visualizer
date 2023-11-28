@@ -1,37 +1,38 @@
 let audioFile;
 let meydaAnalyzer;
+let backgroundCol = 0;
 
-let rectangles = [];
-let maxShapes = 8;
-let backgroundCol;
+// shapes params and type
+let shapes = [];
 let shapeType = "rectangle";
 
 // playback controls
 let playButton, stopButton;
 let volumeSlider;
 
+// fft spectrum
 let fft;
 let fftGradientA, fftGradientB;
 
 // speech recognition
-let speechRec;
+let voiceInput;
 
 function preload() {
-    soundFormats("mp3", "wav");
+    soundFormats("mp3");
     audioFile = loadSound("sounds/Kalte_Ohren_(_Remix_).mp3");
 }
 
 function setup() {
-    createCanvas(1000, 750);
+    createCanvas(1200, 800);
     colorMode(HSB);
     fftGradientA = color(0);
     fftGradientB = color(0);
 
     // setup speech recognition
-    speechRec = new p5.SpeechRec("en-UK", handleSpeech);
-    speechRec.continuous = true;
-    speechRec.interimResults = true;
-    speechRec.start();
+    voiceInput = new p5.SpeechRec("en-UK", handleSpeech);
+    voiceInput.continuous = true;
+    voiceInput.interimResults = true;
+    voiceInput.start();
 
     // setup playback controls
     setupButtons();
@@ -62,11 +63,13 @@ function setup() {
 }
 
 function draw() {
+    background(backgroundCol);
+    drawSpeechCommands();
+
     // start meyda analyzer only if audio is playing
     audioFile.isPlaying() ? meydaAnalyzer.start() : meydaAnalyzer.stop();
 
     // draw volume slider
-    background(0);
     audioFile.setVolume(volumeSlider.value());
     fill(255);
     textSize(18);
@@ -87,51 +90,77 @@ function draw() {
     }
     pop();
 
-    // draw the rectangles
-    if (shapeType === "rectangle") {
-        rectangles.forEach((myrect) => {
-            push();
-            translate(myrect.x, myrect.y);
-            rotate(myrect.rotation);
-            fill(myrect.fillColor);
-            stroke(myrect.borderColor);
-            strokeWeight(myrect.borderSize);
+    // draw shapes based on the params
+    shapes.forEach((param) => {
+        push();
+        translate(param.x, param.y);
+        rotate(param.rotation);
+        fill(param.fillColor);
+        stroke(param.borderColor);
+        strokeWeight(param.borderSize);
+
+        // draw mix of shapes if shapeType is "mix"
+        if (shapeType === "mix") {
+            // map position to random number between 0 and 1
+            let mixRand = map(param.x + param.y, 0, width + height, 0, 1, true);
+
+            // draw random shape based on mapped value
+            if (mixRand < 0.25) {
+                drawShape("rectangle", param);
+            } else if (mixRand < 0.5) {
+                drawShape("circle", param);
+            } else if (mixRand < 0.75) {
+                drawShape("triangle", param);
+            } else {
+                drawShape("pentagon", param);
+            }
+        }
+        // draw circle, triangle, pentagon or square
+        else {
+            drawShape(shapeType, param);
+        }
+
+        pop();
+    });
+}
+
+/** draw different shapes */
+function drawShape(type, param) {
+    switch (type) {
+        case "rectangle":
             rectMode(CENTER);
-            rect(0, 0, myrect.size, myrect.size);
-            pop();
-        });
-    } else if (shapeType === "circle") {
-        rectangles.forEach((myrect) => {
-            push();
-            translate(myrect.x, myrect.y);
-            rotate(myrect.rotation);
-            fill(myrect.fillColor);
-            stroke(myrect.borderColor);
-            strokeWeight(myrect.borderSize);
-            ellipse(0, 0, myrect.size, myrect.size);
-            pop();
-        });
-    } else if (shapeType === "triangle") {
-        rectangles.forEach((myrect) => {
-            push();
-            translate(myrect.x, myrect.y);
-            rotate(myrect.rotation);
-            fill(myrect.fillColor);
-            stroke(myrect.borderColor);
-            strokeWeight(myrect.borderSize);
+            rect(0, 0, param.size, param.size);
+            break;
+        case "circle":
+            ellipse(0, 0, param.size, param.size);
+            break;
+        case "triangle":
             triangle(
-                -myrect.size / 2,
-                myrect.size / 2,
-                myrect.size / 2,
-                myrect.size / 2,
+                -param.size / 2,
+                param.size / 2,
+                param.size / 2,
+                param.size / 2,
                 0,
-                -myrect.size / 2
+                -param.size / 2
             );
-            pop();
-        });
+            break;
+        case "pentagon":
+            beginShape();
+            for (let i = 0; i < 5; i++) {
+                let angle = (TWO_PI / 5) * i - HALF_PI; // Subtract HALF_PI to rotate the pentagon
+                let x = (param.size * cos(angle)) / 2;
+                let y = (param.size * sin(angle)) / 2;
+                vertex(x, y);
+            }
+            endShape(CLOSE);
+            break;
+        default:
+            rectMode(CENTER);
+            rect(0, 0, param.size, param.size);
     }
 }
 
+/** update params of shapes based on audio features */
 function updateVisuals(features) {
     // audio features
     let loudness = features.loudness.total;
@@ -142,18 +171,27 @@ function updateVisuals(features) {
     let energy = features.energy;
     let sharpness = features.perceptualSharpness;
 
-    // map audio features to different parameters
-    let rectCount = map(loudness, 0, 100, 0, maxShapes);
-    let rectSize = map(rms, 0, 1, 50, 250);
+    // map audio features to different parameters //
+
+    // number of shapes
+    let shapeCount = map(loudness, 0, 100, 0, 10);
+    shapes = shapes.slice(0, shapeCount);
+
+    // size of shape
+    let shapeSize = map(rms, 0, 1, 50, 250);
+
+    // color of shape
     let fillColor = color(map(chromaIndex, 0, 11, 0, 360), 100, 100);
+    fillColor.setAlpha(map(energy, 0, 1, 80, 255));
+
+    // border of shape
     let borderSize = map(spectralCentroid, 2000, 5000, 2, 10);
     let borderColorValue = map(spectralRolloff, 0, 22050, 0, 255);
     let borderColor = color(borderColorValue, 100, 255 - borderColorValue);
-    let rotation = map(rms, 0, 1, 0, PI / 4);
-
-    rectangles = rectangles.slice(0, rectCount);
-    fillColor.setAlpha(map(energy, 0, 1, 80, 255));
     borderColor.setAlpha(map(sharpness, 0, 1, 100, 255));
+
+    // rotation of shape
+    let rotation = map(rms, 0, 1, 0, PI / 4);
 
     // map audio features to fft gradient colors
     let saturation = map(spectralRolloff, 0, 22050, 60, 100);
@@ -168,28 +206,36 @@ function updateVisuals(features) {
         80
     );
 
-    // set params for each rectangle
-    for (let i = 0; i < rectCount; i++) {
-        if (!rectangles[i]) {
-            rectangles[i] = {
+    // store params based on the mapped values
+    for (let i = 0; i < shapeCount; i++) {
+        // add new shape's params
+        if (!shapes[i]) {
+            let maxX = width - 50;
+            let maxY = height - 50;
+            shapes[i] = {
+                // x: map(spectralCentroid, 0, 2000, 50, maxX),
+                // y: map(energy, 0, 1, 50, maxY),
                 x: random(50, width - 40),
                 y: random(50, height - 40),
-                size: rectSize,
+                size: shapeSize,
                 fillColor: fillColor,
                 borderColor: borderColor,
                 borderSize: borderSize,
                 rotation: rotation,
             };
-        } else {
-            rectangles[i].size = rectSize;
-            rectangles[i].fillColor = fillColor;
-            rectangles[i].borderColor = borderColor;
-            rectangles[i].borderSize = borderSize;
-            rectangles[i].rotation += rotation;
+        }
+        // update existing params
+        else {
+            shapes[i].size = shapeSize;
+            shapes[i].fillColor = fillColor;
+            shapes[i].borderColor = borderColor;
+            shapes[i].borderSize = borderSize;
+            shapes[i].rotation += rotation;
         }
     }
 }
 
+/** setup the playback control buttons */
 function setupButtons() {
     playButton = createButton("PLAY");
     playButton.position(20, 20);
@@ -211,6 +257,7 @@ function setupButtons() {
     volumeSlider.addClass("slider");
 }
 
+/** play or pause the audio */
 function playAudio() {
     if (!audioFile.isPlaying()) {
         // play audio
@@ -225,35 +272,86 @@ function playAudio() {
     }
 }
 
+/** stop the audio */
 function stopAudio() {
     if (audioFile.isPlaying()) {
+        // stop audio
         audioFile.stop();
         playButton.style("background-color", "#17ad1c");
         playButton.html("PLAY");
     }
 }
 
-// set shape using speech recognition
+/** update relevant params based on speech command given */
 function handleSpeech() {
-    if (speechRec.resultValue) {
-        let speech = speechRec.resultString;
+    if (voiceInput.resultValue) {
+        // get speech input
+        let speech = voiceInput.resultString;
         speech = speech.toLowerCase();
         console.log(speech);
 
-        if (
-            speech.includes("play") ||
-            speech.includes("pause") ||
-            speech.includes("resume")
-        ) {
+        // set audio status based on speech input
+        if (speech.includes("pause") || speech.includes("resume")) {
             playAudio();
         } else if (speech.includes("stop")) {
             stopAudio();
-        } else if (speech.includes("rectangle") || speech.includes("square")) {
+        }
+
+        // set shape type based on speech input
+        else if (speech.includes("rectangle") || speech.includes("square")) {
             shapeType = "rectangle";
         } else if (speech.includes("circle")) {
             shapeType = "circle";
         } else if (speech.includes("triangle")) {
             shapeType = "triangle";
+        } else if (speech.includes("pentagon")) {
+            shapeType = "pentagon";
+        } else if (speech.includes("mix")) {
+            shapeType = "mix";
+        }
+
+        // set background color based on speech input
+        else if (speech.includes("red")) {
+            backgroundCol = color(0, 100, 100);
+        } else if (speech.includes("green")) {
+            backgroundCol = color(120, 100, 100);
+        } else if (speech.includes("blue")) {
+            backgroundCol = color(240, 100, 100);
+        } else if (speech.includes("yellow")) {
+            backgroundCol = color(60, 100, 100);
+        } else if (speech.includes("white")) {
+            backgroundCol = color(0, 0, 100);
+        } else if (speech.includes("black")) {
+            backgroundCol = color(0, 0, 0);
         }
     }
+}
+
+/** draws text to show the available speech commands */
+function drawSpeechCommands() {
+    push();
+
+    // background box
+    fill(0, 0, 0, 100);
+    rectMode(CORNER);
+    rect(940, 0, 260, 140);
+
+    // commands
+    fill(255);
+    textSize(15);
+    text("SPEECH COMMANDS:", 945, 20);
+    textSize(14);
+
+    // playback commands
+    text("• PLAYBACK: Pause, Resume, Stop", 945, 40);
+
+    // shape commands
+    text("• SHAPES: Square, Rectangle, Circle", 945, 60);
+    text("Triangle, Pentagon, Mix", 1010, 78);
+
+    // background color commands
+    text("• BACKGROUND: Black, White, Red", 945, 98);
+    text("Green, Blue, Yellow", 1060, 116);
+
+    pop();
 }
