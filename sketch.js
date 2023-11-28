@@ -55,7 +55,6 @@ function setup() {
                 "chroma",
                 "spectralCentroid",
                 "spectralRolloff",
-                "perceptualSharpness",
             ],
             callback: (features) => updateVisuals(features),
         });
@@ -313,7 +312,7 @@ function stopAudio() {
 function handleSpeech() {
     if (voiceInput.resultValue) {
         // map shape to command
-        const shapeMap = {
+        let shapeMap = {
             rectangle: "rectangle",
             square: "square",
             circle: "circle",
@@ -323,7 +322,7 @@ function handleSpeech() {
         };
 
         // map color to command
-        const colorMap = {
+        let colorMap = {
             red: color(0, 100, 100),
             green: color(120, 100, 100),
             blue: color(240, 100, 100),
@@ -335,6 +334,7 @@ function handleSpeech() {
         // get input from speech
         let speech = voiceInput.resultString;
         speech = speech.toLowerCase();
+        console.log(speech);
 
         // update shape type if command matches
         for (let shape in shapeMap) {
@@ -348,13 +348,6 @@ function handleSpeech() {
             if (speech.includes(color)) {
                 backgroundCol = colorMap[color];
             }
-        }
-
-        // update audio status if command matches
-        if (speech.includes("pause") || speech.includes("resume")) {
-            playAudio();
-        } else if (speech.includes("stop")) {
-            stopAudio();
         }
     }
 }
@@ -374,16 +367,13 @@ function drawSpeechCommands() {
     text("SPEECH COMMANDS:", 945, 20);
     textSize(14);
 
-    // playback commands
-    text("• PLAYBACK: Pause, Resume, Stop", 945, 40);
-
     // shape commands
-    text("• SHAPES: Square, Rectangle, Circle", 945, 60);
-    text("Triangle, Pentagon, Mix", 1010, 78);
+    text("• SHAPES: Square, Rectangle, Circle", 945, 40);
+    text("Triangle, Pentagon, Mix", 1010, 58);
 
     // background color commands
-    text("• BACKGROUND: Black, White, Red", 945, 98);
-    text("Green, Blue, Yellow", 1060, 116);
+    text("• BACKGROUND: Black, White, Red", 945, 78);
+    text("Green, Blue, Yellow", 1060, 96);
 
     pop();
 }
