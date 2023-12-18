@@ -152,7 +152,8 @@ function drawShape(type, param) {
         case "pentagon":
             beginShape();
             for (let i = 0; i < 5; i++) {
-                let angle = (TWO_PI / 5) * i - HALF_PI; // Subtract HALF_PI to rotate the pentagon
+                // Subtract HALF_PI to rotate the pentagon
+                let angle = (TWO_PI / 5) * i - HALF_PI;
                 let x = (param.size * cos(angle)) / 2;
                 let y = (param.size * sin(angle)) / 2;
                 vertex(x, y);
@@ -199,7 +200,7 @@ function updateVisuals(features) {
     let hueVal = (baseHue + i * hueIncrement) % 360;
     let saturationVal = map(spectralCentroid, 0, 100, 50, 100);
     let brightnessVal = map(loudness, 0, 100, 60, 100);
-    let alphaVal = map(energy, 0, 1, 255, 100);
+    let alphaVal = map(energy, 0, 1, 100, 255);
     let fillColor = color(hueVal, saturationVal, brightnessVal, alphaVal);
 
     // set border size and color
