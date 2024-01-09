@@ -168,93 +168,97 @@ function drawShape(type, param) {
 
 /** map audio features to different parameters */
 function updateVisuals(features) {
-  // audio features
-  let loudness = features.loudness.total;
-  let rms = features.rms;
-  let chromaIndex = features.chroma.indexOf(Math.max(...features.chroma));
-  let spectralCentroid = features.spectralCentroid;
-  let spectralRolloff = features.spectralRolloff;
-  let energy = features.energy;
+    // audio features
+    let loudness = features.loudness.total;
+    let rms = features.rms;
+    let chromaIndex = features.chroma.indexOf(Math.max(...features.chroma));
+    let spectralCentroid = features.spectralCentroid;
+    let spectralRolloff = features.spectralRolloff;
+    let energy = features.energy;
 
-  // map loudness to number of shapes
-  let shapeCount = map(loudness, 0, 100, 3, 15);
-  shapes = shapes.slice(0, Math.round(shapeCount));
+    // map loudness to number of shapes
+    let shapeCount = map(loudness, 0, 100, 3, 15);
+    shapes = shapes.slice(0, Math.round(shapeCount));
 
-  // map rms to rotation
-  let rotation = map(rms, 0, 1, 0, PI / 8);
+    // map rms to rotation
+    let rotation = map(rms, 0, 1, 0, PI / 8);
 
-  // use spectralRolloff & spectralCentroid to create gradient colors
-  let saturation = map(spectralRolloff, 0, 22050, 60, 100);
-  fftGradientA = color(map(spectralCentroid, 0, 100, 0, 30), saturation, 80);
-  fftGradientB = color(map(spectralCentroid, 0, 100, 240, 290), saturation, 80);
+    // use spectralRolloff & spectralCentroid to create gradient colors
+    let saturation = map(spectralRolloff, 0, 22050, 60, 100);
+    fftGradientA = color(map(spectralCentroid, 0, 100, 0, 30), saturation, 80);
+    fftGradientB = color(
+        map(spectralCentroid, 0, 100, 240, 290),
+        saturation,
+        80
+    );
 
-  // base and increment of hue so that each shape has different hue
-  let hueIncrement = shapeCount > 1 ? 360 / shapeCount : 0;
-  let baseHue = chromaIndex * 30;
+    // base and increment of hue so that each shape has different hue
+    let hueIncrement = shapeCount > 1 ? 360 / shapeCount : 0;
+    let baseHue = chromaIndex * 30;
 
-  // store params based on the mapped values
-  for (let i = 0; i < shapeCount; i++) {
-    let shapeSize;
+    // store params based on the mapped values
+    for (let i = 0; i < shapeCount; i++) {
+        let shapeSize;
 
-    // set shape color
-    let hueVal = (baseHue + i * hueIncrement) % 360;
-    let saturationVal = map(spectralCentroid, 0, 100, 50, 100);
-    let brightnessVal = map(loudness, 0, 100, 60, 100);
-    let alphaVal = map(energy, 0, 1, 100, 255);
-    let fillColor = color(hueVal, saturationVal, brightnessVal, alphaVal);
+        // set shape color
+        let hueVal = (baseHue + i * hueIncrement) % 360;
+        let saturationVal = map(spectralCentroid, 0, 100, 50, 100);
+        let brightnessVal = map(loudness, 0, 100, 60, 100);
+        let alphaVal = map(energy, 0, 1, 100, 255);
+        let fillColor = color(hueVal, saturationVal, brightnessVal, alphaVal);
 
-    // set border size and color
-    let borderSize = map(spectralCentroid, 0, 100, 2, 5);
-    let borderHue = map(spectralRolloff, 0, 22050, 0, random(360));
-    let borderColor = color(borderHue, 100, brightnessVal, alphaVal);
+        // set border size and color
+        let borderSize = map(spectralCentroid, 0, 100, 2, 5);
+        let borderHue = map(spectralRolloff, 0, 22050, 0, random(360));
+        let borderColor = color(borderHue, 100, brightnessVal, alphaVal);
 
-    let x, y;
-    if (i < 4) {
-      // map to different max sizes for variation in size
-      let maxSizes = [200, 80, 150, 210];
-      shapeSize = map(spectralCentroid, 0, 100, 120, maxSizes[i]);
+        let x, y;
+        if (i < 4) {
+            // map to different max sizes for variation in size
+            let maxSizes = [200, 80, 150, 210];
+            shapeSize = map(spectralCentroid, 0, 100, 120, maxSizes[i]);
 
-      // position first 4 shapes in middle of canvas
-      x = width / 4 + i * (shapeSize + 70);
-      y = height / 2 - shapeSize / 2;
-    } else {
-      // set smaller shape sizes
-      shapeSize = map(spectralCentroid, 0, 100, 5, 25);
+            // position first 4 shapes in middle of canvas
+            x = width / 4 + i * (shapeSize + 70);
+            y = height / 2 - shapeSize / 2;
+        } else {
+            // set smaller shape sizes
+            shapeSize = map(spectralCentroid, 0, 100, 5, 25);
 
-      // position remaining shapes randomly above and below the middle
-      x = random(width);
-      y = random(20, 150);
+            // position remaining shapes randomly above and below the middle
+            x = random(width);
+            y = random(20, 150);
 
-      // use grey colors for fill and border color
-      brightnessVal = map(spectralCentroid, 0, 100, 50, 100);
-      saturationVal = map(spectralCentroid, 0, 100, 0, 20);
-      fillColor = color(0, saturationVal, brightnessVal);
-      borderColor = fillColor;
+            // use grey colors for fill and border color
+            brightnessVal = map(spectralCentroid, 0, 100, 50, 100);
+            saturationVal = map(spectralCentroid, 0, 100, 0, 20);
+            fillColor = color(0, saturationVal, brightnessVal);
+            borderColor = fillColor;
+        }
+
+        // add new shape's params
+        if (!shapes[i]) {
+            shapes[i] = {
+                x: x,
+                y: y,
+                size: shapeSize,
+                fillColor: fillColor,
+                borderColor: borderColor,
+                borderSize: borderSize,
+                rotation: rotation,
+            };
+        }
+        // update existing params
+        else {
+            shapes[i].x = x;
+            shapes[i].y = y;
+            shapes[i].fillColor = fillColor;
+            shapes[i].size = shapeSize;
+            shapes[i].borderColor = borderColor;
+            shapes[i].borderSize = borderSize;
+            shapes[i].rotation += rotation;
+        }
     }
-
-    // add new shape's params
-    if (!shapes[i]) {
-      shapes[i] = {
-        x: x,
-        y: y,
-        size: shapeSize,
-        fillColor: fillColor,
-        borderColor: borderColor,
-        borderSize: borderSize,
-        rotation: rotation,
-      };
-    }
-    // update existing params
-    else {
-      shapes[i].x = x;
-      shapes[i].y = y;
-      shapes[i].fillColor = fillColor;
-      shapes[i].size = shapeSize;
-      shapes[i].borderColor = borderColor;
-      shapes[i].borderSize = borderSize;
-      shapes[i].rotation += rotation;
-    }
-  }
 }
 
 /** setup the playback control buttons */
